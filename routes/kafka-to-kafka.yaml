@@ -11,4 +11,3 @@ rateLimit:
   key: kk
   rate: 10.0
   burst: 20
-# fast-sync-test-2
