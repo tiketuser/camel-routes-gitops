@@ -36,7 +36,8 @@ spec:
           env:
             - {name: GITEA__security__INSTALL_LOCK, value: "true"}
             - {name: GITEA__database__DB_TYPE, value: sqlite3}
-            - {name: GITEA__server__ROOT_URL, value: "http://localhost:30501/"}
+            # must match the repoURL Argo CD uses, or webhook payloads won't match generators
+            - {name: GITEA__server__ROOT_URL, value: "http://gitea-http.git.svc.cluster.local:3000/"}
             - {name: GITEA__server__HTTP_PORT, value: "3000"}
             - {name: GITEA__service__DISABLE_REGISTRATION, value: "true"}
             # allow push webhooks to in-cluster Argo CD endpoints
