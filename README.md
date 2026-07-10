@@ -55,11 +55,20 @@ Redis (`redis` ns), `ratelimit-tls` secret, echo-server.
 4. **`kubectl apply -f argocd/root-app.yaml`** — the only manual apply, ever. The root
    app (father) then syncs `argocd/` from git: the AppProject, the ApplicationSet, and
    itself; the ApplicationSet generates one `route-*` Application (son) per file in `routes/`.
-5. Instant sync: Gitea push webhooks →
-   `http://argocd-applicationset-controller.argocd.svc.cluster.local:7000/api/webhook`
-   (ApplicationSet git generator) and
-   `http://argocd-server.argocd.svc.cluster.local/api/webhook` (app refresh).
-   Gitea needs `GITEA__webhook__ALLOWED_HOST_LIST=private,loopback` (in `bootstrap/gitea.yaml`).
+5. Fast sync (~10s push→Application): Argo is tuned to 30s reconciliation:
+   `ARGOCD_APPLICATIONSET_CONTROLLER_REQUEUE_AFTER=30s` (appset controller env),
+   `timeout.reconciliation: 30s` (argocd-cm), and
+   `ARGOCD_REPO_SERVER_REVISION_CACHE_EXPIRATION=30s` (repo-server env).
+   Gitea push webhooks to
+   `http://argocd-applicationset-controller.argocd.svc.cluster.local:7000/api/webhook` and
+   `http://argocd-server.argocd.svc.cluster.local/api/webhook` are also registered
+   (Gitea needs `GITEA__webhook__ALLOWED_HOST_LIST=private,loopback` and a ROOT_URL that
+   matches the Argo repoURL), **but** Argo CD 3.4's Gitea webhook parser currently rejects
+   Gitea 1.22–1.24 payloads (`cannot unmarshal string into ... created_at of type int64`),
+   so polling is the effective trigger until that upstream bug is fixed. Note also: the
+   ApplicationSet controller must start *after* argocd-server has generated
+   `server.secretkey`, or its webhook handler silently fails — restart it if the startup
+   log shows `failed to create webhook handler`.
 6. UI: exposed on NodePort → `https://localhost:30503` (admin /
    `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d`).
 
