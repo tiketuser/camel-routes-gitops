@@ -22,7 +22,9 @@ spec:
         app.kubernetes.io/part-of: camel-routes
         camel-route/type: '{{.routeType}}'
       finalizers:
-        - resources-finalizer.argocd.argoproj.io
+        # background cascade: foreground deletion deadlocks with the Camel K operator,
+        # which recreates the Integration's Deployment while GC is tearing it down
+        - resources-finalizer.argocd.argoproj.io/background
     spec:
       project: camel-routes
       source:
