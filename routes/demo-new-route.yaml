@@ -1,0 +1,12 @@
+# demo: new route created purely via git push -> Argo auto-discovers it
+name: demo-new-route
+routeType: https-kafka
+source:
+  httpPath: /ingest/demo
+sink:
+  topic: demo-sink
+rateLimit:
+  enabled: true
+  key: demo
+  rate: 2.0
+  burst: 4
