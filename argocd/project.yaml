@@ -3,6 +3,8 @@ kind: AppProject
 metadata:
   name: camel-routes
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"   # project must exist before the ApplicationSet's apps
 spec:
   description: Camel K bridge routes (GitOps-managed Integrations only)
   sourceRepos:

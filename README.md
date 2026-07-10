@@ -11,8 +11,9 @@ in-cluster Camel K operator builds and runs it. Deleting the file prunes the rou
 |---|---|
 | `charts/camel-route/` | Helm chart: one templated `Integration` per route, switching on `routeType`. Embeds `files/RateLimit.java` (Redis token-bucket limiter) when `rateLimit.enabled`. |
 | `routes/*.yaml` | One values file per route — this is the only thing you touch day-to-day. |
+| `argocd/root-app.yaml` | **Root "father" Application (app-of-apps)** — applied once by hand; from then on it GitOps-manages everything in `argocd/`, including itself. |
 | `argocd/project.yaml` | AppProject `camel-routes` — locked to this repo, the `camel-k` namespace, and the `Integration` kind. |
-| `argocd/appset.yaml` | ApplicationSet — git files generator over `routes/*.yaml`, automated sync with prune + self-heal. |
+| `argocd/appset.yaml` | ApplicationSet — git files generator over `routes/*.yaml`; the generated `route-*` Applications are the "sons": automated sync, prune, self-heal, retry with backoff, cascade-delete finalizers. |
 
 ## Add a route
 
@@ -51,9 +52,16 @@ Redis (`redis` ns), `ratelimit-tls` secret, echo-server.
 2. **Argo CD**: `kubectl create ns argocd && kubectl apply -n argocd -f
    https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml`
 3. Register the repo (public repos need nothing; ours is created public).
-4. `kubectl apply -f argocd/project.yaml -f argocd/appset.yaml`
-5. UI: `kubectl port-forward svc/argocd-server -n argocd 8090:443` →
-   `https://localhost:8090` (admin / `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d`).
+4. **`kubectl apply -f argocd/root-app.yaml`** — the only manual apply, ever. The root
+   app (father) then syncs `argocd/` from git: the AppProject, the ApplicationSet, and
+   itself; the ApplicationSet generates one `route-*` Application (son) per file in `routes/`.
+5. Instant sync: Gitea push webhooks →
+   `http://argocd-applicationset-controller.argocd.svc.cluster.local:7000/api/webhook`
+   (ApplicationSet git generator) and
+   `http://argocd-server.argocd.svc.cluster.local/api/webhook` (app refresh).
+   Gitea needs `GITEA__webhook__ALLOWED_HOST_LIST=private,loopback` (in `bootstrap/gitea.yaml`).
+6. UI: exposed on NodePort → `https://localhost:30503` (admin /
+   `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d`).
 
 ### Production / air-gapped variant
 
@@ -63,10 +71,10 @@ Argo → git server. Register the cluster with a scoped ServiceAccount (Integrat
 `argocd/appset.yaml` + `project.yaml` to that cluster, and point `repoURL` at the real git
 server.
 
-### Optional: Integration health check
+### Integration health check (applied at bootstrap)
 
-By default Argo reports Integration CRs Healthy as soon as they apply. To gate health on
-the operator actually running the route, add to `argocd-cm`:
+Route apps gate their health on the operator actually running the route (Running →
+Healthy, Error → Degraded, else Progressing) via this `argocd-cm` entry:
 
 ```yaml
 resource.customizations.health.camel.apache.org_Integration: |

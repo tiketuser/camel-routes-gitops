@@ -1,0 +1,25 @@
+# Root "father" Application (app-of-apps). Applied ONCE by hand at bootstrap;
+# after that it manages everything under argocd/ — including itself, the
+# AppProject and the ApplicationSet, whose generated route Applications are the "sons".
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: camel-routes-root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: http://gitea-http.git.svc.cluster.local:3000/gitops/camel-routes-gitops.git
+    targetRevision: main
+    path: argocd
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true

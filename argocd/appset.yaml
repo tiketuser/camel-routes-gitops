@@ -12,11 +12,17 @@ spec:
         revision: main
         files:
           - path: "routes/*.yaml"
+  syncPolicy:
+    # deleting the ApplicationSet (or its generator entry) cascades to the child app
+    preserveResourcesOnDeletion: false
   template:
     metadata:
       name: 'route-{{.name}}'
       labels:
         app.kubernetes.io/part-of: camel-routes
+        camel-route/type: '{{.routeType}}'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
     spec:
       project: camel-routes
       source:
@@ -33,3 +39,10 @@ spec:
         automated:
           prune: true
           selfHeal: true
+        retry:
+          limit: 5
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 3m
+      revisionHistoryLimit: 5
