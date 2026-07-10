@@ -1,0 +1,11 @@
+name: latency-test
+routeType: https-kafka
+source:
+  httpPath: /ingest/lt
+sink:
+  topic: lt-sink
+rateLimit:
+  enabled: true
+  key: lt
+  rate: 2.0
+  burst: 4
