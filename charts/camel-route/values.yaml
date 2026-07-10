@@ -1,0 +1,52 @@
+# Defaults for a camel-route. Per-route files in routes/*.yaml override these.
+#
+# ── Full schema ──────────────────────────────────────────────────────────────
+# name: orders-kk                  # REQUIRED — Integration name (k8s name rules)
+# routeType: kafka-kafka           # REQUIRED — kafka-kafka | https-kafka | https-https
+# source:
+#   topic: kk-source               # kafka-kafka: source topic
+#   httpPath: /ingest/hk           # https-*: platform-http path
+# sink:
+#   topic: kk-sink                 # *-kafka: sink topic
+#   url: http://echo-server.camel-k.svc.cluster.local/echo   # https-https: downstream URL
+# kafka: {...}                     # override brokers/SASL below
+# rateLimit:
+#   enabled: true
+#   key: kk                        # Redis bucket key; routes sharing a key share one limit
+#   rate: 10.0                     # sustained tokens/s
+#   burst: 20                      # bucket capacity
+# tls:
+#   enabled: true                  # https-* only: pod-terminated TLS on 8443
+# replicas: 1
+
+namespace: camel-k
+
+kafka:
+  brokers: kafka.kafka.svc.cluster.local:9092
+  securityProtocol: SASL_PLAINTEXT
+  saslMechanism: SCRAM-SHA-256
+  credentialsSecret: kafka-scram-credentials   # must provide kafka.user / kafka.password
+
+rateLimit:
+  enabled: true
+  # key defaults to .Values.name when unset
+  rate: 5.0
+  burst: 10
+  # mode defaults by source: kafka-* -> block (backpressure), https-* -> reject (429).
+  # Set explicitly only to override.
+  mode: ""
+
+redis:
+  host: redis.redis.svc.cluster.local
+  port: 6379
+
+tls:
+  enabled: true
+  secret: ratelimit-tls           # mounted at /etc/tls (tls.crt / tls.key)
+
+replicas: 1
+
+traits:
+  prometheus:
+    enabled: true
+    podMonitor: false

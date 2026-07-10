@@ -1,0 +1,16 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: camel-routes
+  namespace: argocd
+spec:
+  description: Camel K bridge routes (GitOps-managed Integrations only)
+  sourceRepos:
+    - http://gitea-http.git.svc.cluster.local:3000/gitops/camel-routes-gitops.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: camel-k
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: camel.apache.org
+      kind: Integration

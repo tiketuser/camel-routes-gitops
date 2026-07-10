@@ -1,0 +1,13 @@
+# kafka-to-kafka: consume kk-source -> rate-limit (blocking backpressure) -> produce kk-sink.
+name: kafka-to-kafka
+routeType: kafka-kafka
+source:
+  topic: kk-source
+  groupId: kk-bridge
+sink:
+  topic: kk-sink
+rateLimit:
+  enabled: true
+  key: kk
+  rate: 10.0
+  burst: 20

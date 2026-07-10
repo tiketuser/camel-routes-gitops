@@ -1,0 +1,63 @@
+{{- $t := include "camel-route.type" . -}}
+{{- $httpSource := eq (include "camel-route.httpSource" .) "true" -}}
+{{- $usesKafka := eq (include "camel-route.usesKafka" .) "true" -}}
+apiVersion: camel.apache.org/v1
+kind: Integration
+metadata:
+  name: {{ required "name is required" .Values.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    camel-route/type: {{ $t }}
+spec:
+  {{- if gt (int .Values.replicas) 1 }}
+  replicas: {{ .Values.replicas }}
+  {{- end }}
+  dependencies:
+    {{- if $usesKafka }}
+    - camel:kafka
+    {{- end }}
+    {{- if $httpSource }}
+    - camel:platform-http
+    {{- end }}
+    {{- if eq $t "https-https" }}
+    - camel:http
+    {{- end }}
+    {{- if .Values.rateLimit.enabled }}
+    - mvn:redis.clients:jedis:5.2.0
+    {{- end }}
+  traits:
+    prometheus:
+      enabled: {{ .Values.traits.prometheus.enabled }}
+      podMonitor: {{ .Values.traits.prometheus.podMonitor }}
+    {{- if or $usesKafka (and $httpSource .Values.tls.enabled) }}
+    mount:
+      {{- if $usesKafka }}
+      configs:
+        - secret:{{ .Values.kafka.credentialsSecret }}
+      {{- end }}
+      {{- if and $httpSource .Values.tls.enabled }}
+      resources:
+        - secret:{{ .Values.tls.secret }}@/etc/tls
+      {{- end }}
+    {{- end }}
+    {{- if and $httpSource .Values.tls.enabled }}
+    camel:
+      properties:
+        - quarkus.http.ssl-port=8443
+        - quarkus.http.ssl.certificate.files=/etc/tls/tls.crt
+        - quarkus.http.ssl.certificate.key-files=/etc/tls/tls.key
+    {{- end }}
+    environment:
+      vars:
+        - REDIS_HOST={{ .Values.redis.host }}
+        - REDIS_PORT={{ .Values.redis.port }}
+  sources:
+    {{- if .Values.rateLimit.enabled }}
+    - name: RateLimit.java
+      content: |
+{{ .Files.Get "files/RateLimit.java" | indent 8 }}
+    {{- end }}
+    - name: {{ .Values.name }}.yaml
+      content: |
+{{ include "camel-route.routeYaml" . | indent 8 }}

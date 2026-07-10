@@ -1,0 +1,12 @@
+# https-to-https: POST /ingest/hh -> rate-limit (429 over limit) -> forward to echo-server -> 202.
+name: https-to-https
+routeType: https-https
+source:
+  httpPath: /ingest/hh
+sink:
+  url: http://echo-server.camel-k.svc.cluster.local/echo
+rateLimit:
+  enabled: true
+  key: hh
+  rate: 5.0
+  burst: 10

@@ -1,0 +1,59 @@
+# Minimal in-cluster Gitea for local GitOps dev.
+# Push from host:  http://localhost:30501/gitops/camel-routes-gitops.git
+# Argo CD fetches: http://gitea-http.git.svc.cluster.local:3000/gitops/camel-routes-gitops.git
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: git
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gitea-data
+  namespace: git
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitea
+  namespace: git
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: gitea}
+  template:
+    metadata:
+      labels: {app: gitea}
+    spec:
+      containers:
+        - name: gitea
+          image: gitea/gitea:1.22
+          env:
+            - {name: GITEA__security__INSTALL_LOCK, value: "true"}
+            - {name: GITEA__database__DB_TYPE, value: sqlite3}
+            - {name: GITEA__server__ROOT_URL, value: "http://localhost:30501/"}
+            - {name: GITEA__server__HTTP_PORT, value: "3000"}
+            - {name: GITEA__service__DISABLE_REGISTRATION, value: "true"}
+          ports:
+            - {containerPort: 3000, name: http}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: gitea-data}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitea-http
+  namespace: git
+spec:
+  selector: {app: gitea}
+  ports:
+    - {name: http, port: 3000, targetPort: 3000, nodePort: 30501}
+  type: NodePort
