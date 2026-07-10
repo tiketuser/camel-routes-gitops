@@ -41,36 +41,40 @@ Defaults (brokers, SASL, Redis host, TLS secret, prometheus traits) live in
 - **Delete a route**: delete the file, push — prune removes the Integration.
 - **Preview locally**: `helm template charts/camel-route -f routes/<name>.yaml`
 
-## Bootstrap (local dev cluster, everything in Docker/k3s)
+## Bootstrap (local dev cluster, GitHub as the git source)
+
+Source of truth: **https://github.com/TheRozom/camel-routes-gitops** (private).
 
 Prerequisites on the cluster (not Argo-managed — see the main repo's air-gap runbook):
 Camel K operator + registry + Maven mirror, Kafka + `kafka-scram-credentials` secret,
 Redis (`redis` ns), `ratelimit-tls` secret, echo-server.
 
-1. **Gitea** (in-cluster git server): `kubectl apply -f bootstrap/gitea.yaml`, then push this
-   repo to `http://localhost:30501/gitops/camel-routes-gitops.git` (user `gitops`).
-2. **Argo CD**: `kubectl create ns argocd && kubectl apply -n argocd -f
+1. **Argo CD**: `kubectl create ns argocd && kubectl apply -n argocd --server-side -f
    https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml`
-3. Register the repo (public repos need nothing; ours is created public).
-4. **`kubectl apply -f argocd/root-app.yaml`** — the only manual apply, ever. The root
-   app (father) then syncs `argocd/` from git: the AppProject, the ApplicationSet, and
+2. **Repo access** (private repo): create the repository credential secret — commands in
+   `bootstrap/github-repo-secret.example.yaml` (token created imperatively, never committed).
+3. **`kubectl apply -f argocd/root-app.yaml`** — the only manual apply, ever. The root
+   app (father) then syncs `argocd/` from GitHub: the AppProject, the ApplicationSet, and
    itself; the ApplicationSet generates one `route-*` Application (son) per file in `routes/`.
-5. Fast sync (~10s push→Application): Argo is tuned to 30s reconciliation:
+4. Fast sync (~10-40s push→live): Argo is tuned to 30s reconciliation:
    `ARGOCD_APPLICATIONSET_CONTROLLER_REQUEUE_AFTER=30s` (appset controller env),
    `timeout.reconciliation: 30s` (argocd-cm), and
    `ARGOCD_REPO_SERVER_REVISION_CACHE_EXPIRATION=30s` (repo-server env).
-   Gitea push webhooks to
-   `http://argocd-applicationset-controller.argocd.svc.cluster.local:7000/api/webhook` and
-   `http://argocd-server.argocd.svc.cluster.local/api/webhook` are also registered
-   (Gitea needs `GITEA__webhook__ALLOWED_HOST_LIST=private,loopback` and a ROOT_URL that
-   matches the Argo repoURL), **but** Argo CD 3.4's Gitea webhook parser currently rejects
-   Gitea 1.22–1.24 payloads (`cannot unmarshal string into ... created_at of type int64`),
-   so polling is the effective trigger until that upstream bug is fixed. Note also: the
-   ApplicationSet controller must start *after* argocd-server has generated
-   `server.secretkey`, or its webhook handler silently fails — restart it if the startup
-   log shows `failed to create webhook handler`.
-6. UI: exposed on NodePort → `https://localhost:30503` (admin /
+   GitHub webhooks can't reach a local cluster (no inbound route), so polling is the
+   trigger; when Argo runs somewhere GitHub can reach, add a push webhook to
+   `https://<argocd-host>/api/webhook` for instant sync.
+5. UI: exposed on NodePort → `https://localhost:30503` (admin /
    `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d`).
+
+### Alternative: fully in-cluster git (no internet)
+
+`bootstrap/gitea.yaml` runs Gitea inside the cluster (push via `localhost:30501`, Argo
+fetches via `gitea-http.git.svc.cluster.local:3000`) — useful for the air-gapped variant.
+Caveats we hit, kept for the record: Gitea's `ROOT_URL` must match Argo's repoURL or
+webhook payloads are ignored; Argo CD 3.4's Gitea webhook parser rejects Gitea 1.22–1.24
+push payloads (`created_at` string vs int64), so polling is the trigger there too; and the
+ApplicationSet controller's webhook handler fails silently if it starts before argocd-server
+generates `server.secretkey` — restart it if the log shows `failed to create webhook handler`.
 
 ### Production / air-gapped variant
 

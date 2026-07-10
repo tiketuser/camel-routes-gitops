@@ -11,7 +11,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: http://gitea-http.git.svc.cluster.local:3000/gitops/camel-routes-gitops.git
+    repoURL: https://github.com/TheRozom/camel-routes-gitops.git
     targetRevision: main
     path: argocd
   destination:
