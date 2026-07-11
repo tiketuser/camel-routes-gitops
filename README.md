@@ -118,6 +118,22 @@ Argo → git server. Register the cluster with a scoped ServiceAccount (Integrat
 `argocd/appset.yaml` + `project.yaml` to that cluster, and point `repoURL` at the real git
 server.
 
+`airgap-bundle/` packages this whole control-plane bootstrap (Argo CD + in-cluster Gitea,
+images, CLIs, and this repo's own content as an initial commit) as a one-command
+`install.sh` for an air-gapped k3s host — see `airgap-bundle/AIRGAP-DEPLOY.md`. It assumes
+the Camel K runtime itself is already deployed via the main repo's own air-gap bundle.
+
+**Download ready-made:** the complete transfer bundle (`camel-routes-gitops-airgap-bundle.zip`,
+~360 MB — Argo CD/Dex/Redis/Gitea images, `kubectl`/`helm`, vendored Argo CD manifests, and
+this repo's content) is attached to the
+[v0.2.0 release](https://github.com/TheRozom/camel-routes-gitops/releases/tag/v0.2.0):
+
+```bash
+gh release download v0.2.0 --repo TheRozom/camel-routes-gitops
+```
+
+Or regenerate it yourself on any online machine: `airgap-bundle/regenerate-bundle.sh`.
+
 ### Integration health check (applied at bootstrap)
 
 Route apps gate their health on the operator actually running the route (Running →
