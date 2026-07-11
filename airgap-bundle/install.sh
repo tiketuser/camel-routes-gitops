@@ -63,9 +63,11 @@ if [[ "$GIT_BACKEND" == "gitea" ]]; then
 
   echo "    creating Gitea admin user (ignored if it already exists)"
   GITEA_POD=$(kubectl get pod -n git -l app=gitea -o jsonpath='{.items[0].metadata.name}')
-  kubectl exec -n git "$GITEA_POD" -- gitea admin user create \
-    --username "$GITEA_ADMIN_USER" --password "$GITEA_ADMIN_PASSWORD" \
-    --email "${GITEA_ADMIN_USER}@local" --admin --must-change-password=false \
+  # kubectl exec runs as the container's default user (root); Gitea refuses admin
+  # commands as root ("Gitea is not supposed to be run as root") — run as `git`,
+  # same as the image's own entrypoint does internally.
+  kubectl exec -n git "$GITEA_POD" -- su git -c \
+    "gitea admin user create --username '$GITEA_ADMIN_USER' --password '$GITEA_ADMIN_PASSWORD' --email '${GITEA_ADMIN_USER}@local' --admin --must-change-password=false" \
     || echo "    (user create failed/skipped — likely already exists)"
 
   echo "    creating Gitea repo ${GITEA_REPO_OWNER}/${GITEA_REPO_NAME} (ignored if it already exists)"
