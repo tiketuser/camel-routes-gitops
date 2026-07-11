@@ -1,0 +1,12 @@
+# mq-to-mq: consume DEV.MM.SOURCE -> rate-limit (block) -> produce DEV.MM.SINK.
+name: mq-to-mq
+routeType: mq-mq
+source:
+  queue: DEV.MM.SOURCE
+sink:
+  queue: DEV.MM.SINK
+rateLimit:
+  enabled: true
+  key: mm
+  rate: 10.0
+  burst: 20

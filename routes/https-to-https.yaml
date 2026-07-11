@@ -4,7 +4,7 @@ routeType: https-https
 source:
   httpPath: /ingest/hh
 sink:
-  url: http://echo-server.camel-k.svc.cluster.local/echo
+  url: echo-server.camel-k.svc.cluster.local/echo
 rateLimit:
   enabled: true
   key: hh

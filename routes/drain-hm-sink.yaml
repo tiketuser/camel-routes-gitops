@@ -1,0 +1,12 @@
+# drain-hm-sink: consume DEV.HM.SINK as fast as possible and discard.
+#
+# Same problem as drain-mm-sink.yaml but for https-to-mq's terminal queue:
+# nothing ever reads DEV.HM.SINK, so it fills to MAXDEPTH and every subsequent
+# https-to-mq request fails its JMS send with MQRC_Q_FULL instead of returning
+# 202. Keeping this queue drained keeps https-to-mq's success path working.
+name: drain-hm-sink
+routeType: mq-drain
+source:
+  queue: DEV.HM.SINK
+rateLimit:
+  enabled: false

@@ -1,0 +1,12 @@
+# mq-to-https: consume DEV.MH.SOURCE -> rate-limit (block) -> forward to echo-server (mTLS).
+name: mq-to-https
+routeType: mq-https
+source:
+  queue: DEV.MH.SOURCE
+sink:
+  url: echo-server.camel-k.svc.cluster.local/echo
+rateLimit:
+  enabled: true
+  key: mh
+  rate: 10.0
+  burst: 20

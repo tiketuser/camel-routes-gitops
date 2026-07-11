@@ -1,6 +1,10 @@
 {{- $t := include "camel-route.type" . -}}
 {{- $httpSource := eq (include "camel-route.httpSource" .) "true" -}}
 {{- $usesKafka := eq (include "camel-route.usesKafka" .) "true" -}}
+{{- $usesMq := eq (include "camel-route.usesMq" .) "true" -}}
+{{- $usesEcho := and .Values.sink (ne (.Values.sink.url | default "") "") -}}
+{{- $clientAuth := and $httpSource .Values.tls.enabled .Values.tls.clientAuth.enabled -}}
+{{- $needsPlugin := or .Values.rateLimit.enabled $usesMq $usesEcho -}}
 apiVersion: camel.apache.org/v1
 kind: Integration
 metadata:
@@ -17,10 +21,14 @@ spec:
     {{- if $usesKafka }}
     - camel:kafka
     {{- end }}
+    {{- if $usesMq }}
+    - camel:jms
+    - mvn:com.ibm.mq:com.ibm.mq.jakarta.client:9.4.4.0
+    {{- end }}
     {{- if $httpSource }}
     - camel:platform-http
     {{- end }}
-    {{- if eq $t "https-https" }}
+    {{- if $usesEcho }}
     - camel:http
     {{- end }}
     {{- if .Values.rateLimit.enabled }}
@@ -30,15 +38,28 @@ spec:
     prometheus:
       enabled: {{ .Values.traits.prometheus.enabled }}
       podMonitor: {{ .Values.traits.prometheus.podMonitor }}
-    {{- if or $usesKafka (and $httpSource .Values.tls.enabled) }}
+    {{- if or $usesKafka $usesMq $usesEcho (and $httpSource .Values.tls.enabled) }}
     mount:
-      {{- if $usesKafka }}
+      {{- if or $usesKafka $usesMq }}
       configs:
+        {{- if $usesKafka }}
         - secret:{{ .Values.kafka.credentialsSecret }}
+        {{- end }}
+        {{- if $usesMq }}
+        - secret:{{ .Values.mq.credentialsSecret }}
+        {{- end }}
       {{- end }}
-      {{- if and $httpSource .Values.tls.enabled }}
+      {{- if or (and $httpSource .Values.tls.enabled) $usesEcho }}
       resources:
+        {{- if and $httpSource .Values.tls.enabled }}
         - secret:{{ .Values.tls.secret }}@/etc/tls
+        {{- end }}
+        {{- if $clientAuth }}
+        - secret:{{ .Values.tls.clientAuth.secret }}@/etc/tls-ca
+        {{- end }}
+        {{- if $usesEcho }}
+        - secret:{{ .Values.echoTls.secret }}@/etc/echo-tls
+        {{- end }}
       {{- end }}
     {{- end }}
     {{- if and $httpSource .Values.tls.enabled }}
@@ -47,13 +68,19 @@ spec:
         - quarkus.http.ssl-port=8443
         - quarkus.http.ssl.certificate.files=/etc/tls/tls.crt
         - quarkus.http.ssl.certificate.key-files=/etc/tls/tls.key
+        {{- if $clientAuth }}
+        - quarkus.http.ssl.client-auth=REQUIRED
+        - quarkus.http.ssl.certificate.trust-store-file=/etc/tls-ca/client-ca.crt
+        - quarkus.http.ssl.certificate.trust-store-file-type=PEM
+        - quarkus.http.insecure-requests=disabled
+        {{- end }}
     {{- end }}
     environment:
       vars:
         - REDIS_HOST={{ .Values.redis.host }}
         - REDIS_PORT={{ .Values.redis.port }}
   sources:
-    {{- if .Values.rateLimit.enabled }}
+    {{- if $needsPlugin }}
     - name: RateLimit.java
       content: |
 {{ .Files.Get "files/RateLimit.java" | indent 8 }}
