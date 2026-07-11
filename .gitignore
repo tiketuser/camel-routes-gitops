@@ -1,0 +1,7 @@
+# Real secrets — only config.env.example is tracked
+airgap-bundle/config.env
+
+# Built by airgap-bundle/regenerate-bundle.sh — large binaries, not source
+airgap-bundle/images/all-images-amd64.tar
+airgap-bundle/cli/
+camel-routes-gitops-airgap-bundle.zip

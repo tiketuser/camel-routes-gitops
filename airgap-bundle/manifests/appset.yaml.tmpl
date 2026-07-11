@@ -1,0 +1,51 @@
+# Rendered by install.sh (envsubst) and committed into repo-snapshot/argocd/appset.yaml
+# before that snapshot is pushed to Gitea, so the ApplicationSet's generator and the
+# generated route Applications all point at the same git backend as root-app.yaml.
+# See ../../argocd/appset.yaml for the GitHub-source version.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: camel-routes
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: ${REPO_URL}
+        revision: ${REVISION}
+        files:
+          - path: "routes/*.yaml"
+  syncPolicy:
+    preserveResourcesOnDeletion: false
+  template:
+    metadata:
+      name: 'route-{{.name}}'
+      labels:
+        app.kubernetes.io/part-of: camel-routes
+        camel-route/type: '{{.routeType}}'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io/background
+    spec:
+      project: camel-routes
+      source:
+        repoURL: ${REPO_URL}
+        targetRevision: ${REVISION}
+        path: charts/camel-route
+        helm:
+          valueFiles:
+            - '../../{{.path.path}}/{{.path.filename}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: camel-k
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        retry:
+          limit: 5
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 3m
+      revisionHistoryLimit: 5
