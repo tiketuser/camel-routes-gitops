@@ -21,7 +21,7 @@ spec:
     {{- if $usesKafka }}
     - camel:kafka
     {{- end }}
-    {{- if $usesMq }}
+    {{- if or $usesMq $needsPlugin }}
     - camel:jms
     - mvn:com.ibm.mq:com.ibm.mq.jakarta.client:9.4.4.0
     {{- end }}
@@ -31,7 +31,7 @@ spec:
     {{- if $usesEcho }}
     - camel:http
     {{- end }}
-    {{- if .Values.rateLimit.enabled }}
+    {{- if $needsPlugin }}
     - mvn:redis.clients:jedis:5.2.0
     {{- end }}
   traits:
