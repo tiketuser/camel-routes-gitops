@@ -1,11 +1,14 @@
 # kafka-to-kafka: consume kk-source -> rate-limit (blocking backpressure) -> produce kk-sink.
+# Both sides inherit the chart-wide kafka: defaults; either side could set its own
+# brokers/credentials to bridge two clusters.
 name: kafka-to-kafka
-routeType: kafka-kafka
 source:
-  topic: kk-source
-  groupId: kk-bridge
+  kafka:
+    topic: kk-source
+    groupId: kk-bridge
 sink:
-  topic: kk-sink
+  kafka:
+    topic: kk-sink
 kafka:
   brokers: kafka.kafka.svc.cluster.local:9092
   securityProtocol: SASL_PLAINTEXT

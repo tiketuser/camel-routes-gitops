@@ -1,6 +1,8 @@
 apiVersion: v2
 name: camel-route
-description: Templated Camel K Integration for a single rate-limited bridge route (kafka-kafka, https-kafka, https-https, mq-mq, https-mq, mq-https, mq-drain)
+description: >-
+  Templated Camel K Integration for a single rate-limited bridge route;
+  type inferred from the kafka/http kinds nested under source and sink
 type: application
-version: 0.2.0
+version: 0.3.0
 appVersion: "1.0"

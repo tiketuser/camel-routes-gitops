@@ -23,7 +23,7 @@ import redis.clients.jedis.JedisPooled;
  *
  * IBM MQ support (mqConnectionFactory bean, mq-mq/https-mq/mq-https/mq-drain routes)
  * has been pulled out for now — MQ's amd64-only image doesn't run under this cluster's
- * CPU emulation. Re-add the bean here (and the routeType branches in the Helm chart)
+ * CPU emulation. Re-add the bean here (and an mq: source/sink kind in the Helm chart)
  * if MQ comes back.
  *
  * ── How YAML routes use it ────────────────────────────────────────────────

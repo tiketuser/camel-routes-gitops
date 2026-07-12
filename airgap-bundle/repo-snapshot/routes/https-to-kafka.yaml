@@ -1,10 +1,11 @@
 # https-to-kafka: POST /ingest/hk -> rate-limit (429 over limit) -> produce hk-sink -> 202.
 name: https-to-kafka
-routeType: https-kafka
 source:
-  httpPath: /ingest/hk
+  http:
+    path: /ingest/hk
 sink:
-  topic: hk-sink
+  kafka:
+    topic: hk-sink
 kafka:
   brokers: kafka.kafka.svc.cluster.local:9092
   securityProtocol: SASL_PLAINTEXT

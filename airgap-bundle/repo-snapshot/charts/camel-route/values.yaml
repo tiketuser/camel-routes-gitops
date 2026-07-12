@@ -2,19 +2,30 @@
 #
 # ── Full schema ──────────────────────────────────────────────────────────────
 # name: orders-kk                  # REQUIRED — Integration name (k8s name rules)
-# routeType: kafka-kafka           # REQUIRED — kafka-kafka | https-kafka | https-https |
-#                                  #            mq-mq | https-mq | mq-https
+#
+# source: / sink: each nest EXACTLY ONE kind key — kafka: or http:. The route
+# type is inferred from the pair (no routeType field). A side's kafka: block is
+# merged over the chart-wide kafka: defaults below, so source and sink can point
+# at different clusters with different credentials.
+#
 # source:
-#   topic: kk-source               # kafka-kafka: source topic
-#   httpPath: /ingest/hk           # https-*: platform-http path
-#   queue: DEV.MM.SOURCE           # mq-*: source queue
+#   kafka:
+#     topic: kk-source             # REQUIRED for a kafka source
+#     groupId: kk-bridge           # default: <name>-group
+#     autoOffsetReset: earliest    # default: earliest
+#     brokers: ...                 # any of the kafka: defaults below, per side
+#     credentialsSecret: ...       # side-specific secret; if it coexists with
+#     userKey: kafkab.user         #   another kafka side's secret, its keys must
+#     passwordKey: kafkab.password #   be uniquely named — point these at them
+#   http:
+#     path: /ingest/hk             # platform-http path (TLS per tls: below)
 # sink:
-#   topic: kk-sink                 # *-kafka: sink topic
-#   queue: DEV.MM.SINK             # *-mq (queue side): sink queue
-#   url: echo-server.camel-k.svc.cluster.local/echo   # https-https / mq-https: downstream host+path,
-#                                  # no scheme — the route always calls it over mTLS HTTPS
-# kafka: {...}                     # override brokers/SASL below
-# mq: {...}                        # override host/port/channel/qmgr/credentialsSecret below
+#   kafka:
+#     topic: kk-sink               # REQUIRED for a kafka sink
+#   http:
+#     url: echo-server.camel-k.svc.cluster.local/echo   # downstream host+path,
+#                                  # no scheme — always called over mTLS HTTPS
+# kafka: {...}                     # chart-wide kafka defaults (below)
 # rateLimit:
 #   enabled: true
 #   key: kk                        # Redis bucket key; routes sharing a key share one limit
@@ -32,19 +43,12 @@ kafka:
   saslMechanism: SCRAM-SHA-256
   credentialsSecret: kafka-scram-credentials   # must provide kafka.user / kafka.password
 
-mq:
-  host: mq.mq.svc.cluster.local
-  port: 1414
-  channel: DEV.APP.SVRCONN
-  qmgr: QM1
-  credentialsSecret: mq-app-credentials        # must provide mq.user / mq.password
-
 rateLimit:
   enabled: true
   # key defaults to .Values.name when unset
   rate: 5.0
   burst: 10
-  # mode defaults by source: kafka-*/mq-* (queue) -> block (backpressure), https-* -> reject (429).
+  # mode defaults by source: kafka-* (queue) -> block (backpressure), https-* -> reject (429).
   # Set explicitly only to override.
   mode: ""
 

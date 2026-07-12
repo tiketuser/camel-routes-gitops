@@ -2,16 +2,30 @@
 #
 # ── Full schema ──────────────────────────────────────────────────────────────
 # name: orders-kk                  # REQUIRED — Integration name (k8s name rules)
-# routeType: kafka-kafka           # REQUIRED — kafka-kafka | https-kafka | https-https
-#                                  # (IBM MQ routeTypes removed for now — see charts/camel-route note)
+#
+# source: / sink: each nest EXACTLY ONE kind key — kafka: or http:. The route
+# type is inferred from the pair (no routeType field). A side's kafka: block is
+# merged over the chart-wide kafka: defaults below, so source and sink can point
+# at different clusters with different credentials.
+#
 # source:
-#   topic: kk-source               # kafka-kafka: source topic
-#   httpPath: /ingest/hk           # https-*: platform-http path
+#   kafka:
+#     topic: kk-source             # REQUIRED for a kafka source
+#     groupId: kk-bridge           # default: <name>-group
+#     autoOffsetReset: earliest    # default: earliest
+#     brokers: ...                 # any of the kafka: defaults below, per side
+#     credentialsSecret: ...       # side-specific secret; if it coexists with
+#     userKey: kafkab.user         #   another kafka side's secret, its keys must
+#     passwordKey: kafkab.password #   be uniquely named — point these at them
+#   http:
+#     path: /ingest/hk             # platform-http path (TLS per tls: below)
 # sink:
-#   topic: kk-sink                 # *-kafka: sink topic
-#   url: echo-server.camel-k.svc.cluster.local/echo   # https-https: downstream host+path,
-#                                  # no scheme — the route always calls it over mTLS HTTPS
-# kafka: {...}                     # override brokers/SASL below
+#   kafka:
+#     topic: kk-sink               # REQUIRED for a kafka sink
+#   http:
+#     url: echo-server.camel-k.svc.cluster.local/echo   # downstream host+path,
+#                                  # no scheme — always called over mTLS HTTPS
+# kafka: {...}                     # chart-wide kafka defaults (below)
 # rateLimit:
 #   enabled: true
 #   key: kk                        # Redis bucket key; routes sharing a key share one limit

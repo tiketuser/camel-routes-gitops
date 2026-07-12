@@ -10,9 +10,6 @@ import org.apache.camel.support.jsse.TrustManagersParameters;
 
 import redis.clients.jedis.JedisPooled;
 
-import com.ibm.mq.jakarta.jms.MQConnectionFactory;
-import jakarta.jms.JMSException;
-
 /**
  * Rate-limit "plugin" for Camel K — the ONLY Java file you deploy.
  *
@@ -23,8 +20,11 @@ import jakarta.jms.JMSException;
  * uses to call echo-server: a client keystore (bridge's identity, presented to
  * echo-server) and a truststore (echo-server's cert, so the bridge only talks
  * to that server) — both loaded from the echo-client-tls secret.
- * It also registers "mqConnectionFactory", the IBM MQ JMS connection factory the
- * mq-to-mq / https-to-mq / mq-to-https routes use via `jms:queue:...`.
+ *
+ * IBM MQ support (mqConnectionFactory bean, mq-mq/https-mq/mq-https/mq-drain routes)
+ * has been pulled out for now — MQ's amd64-only image doesn't run under this cluster's
+ * CPU emulation. Re-add the bean here (and an mq: source/sink kind in the Helm chart)
+ * if MQ comes back.
  *
  * ── How YAML routes use it ────────────────────────────────────────────────
  *   HTTP  (reject over-limit with 429 + Retry-After, stops the route):
@@ -104,27 +104,6 @@ public class RateLimit extends RouteBuilder {
         sslContextParameters.setKeyManagers(keyManagers);
         sslContextParameters.setTrustManagers(trustManagers);
         return sslContextParameters;
-    }
-
-    /**
-     * IBM MQ connection factory for the mq-to-mq / https-to-mq / mq-to-https routes.
-     * Username/password aren't set here — routes pass them per-endpoint via
-     * `jms:queue:...?username={{mq.user}}&password={{mq.password}}`, populated from
-     * the mq-app-credentials secret (same pattern as {{kafka.user}}/{{kafka.password}}).
-     */
-    @BindToRegistry("mqConnectionFactory")
-    public MQConnectionFactory mqConnectionFactory() throws JMSException {
-        MQConnectionFactory connectionFactory = new MQConnectionFactory();
-        connectionFactory.setHostName(System.getenv().getOrDefault("MQ_HOST", "mq.mq.svc.cluster.local"));
-        connectionFactory.setPort(Integer.parseInt(System.getenv().getOrDefault("MQ_PORT", "1414")));
-        connectionFactory.setChannel(System.getenv().getOrDefault("MQ_CHANNEL", "DEV.APP.SVRCONN"));
-        connectionFactory.setQueueManager(System.getenv().getOrDefault("MQ_QMGR", "QM1"));
-        // 1 == com.ibm.msg.client.wmq.WMQConstants.WMQ_CM_CLIENT (client/TCP transport,
-        // as opposed to 0 == bindings mode). Hardcoded because that companion class
-        // doesn't resolve on the joor runtime-compile classpath even though
-        // MQConnectionFactory (same jar) does; the constant is stable across MQ versions.
-        connectionFactory.setTransportType(1);
-        return connectionFactory;
     }
 
     /** The bean invoked from YAML. Thread-safe (JedisPooled is), single shared instance. */

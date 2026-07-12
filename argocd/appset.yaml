@@ -20,7 +20,8 @@ spec:
       name: 'route-{{.name}}'
       labels:
         app.kubernetes.io/part-of: camel-routes
-        camel-route/type: '{{.routeType}}'
+        # camel-route/type lives on the Integration (derived by the chart from
+        # the source/sink kinds — there is no routeType field to template here)
       finalizers:
         # background cascade: foreground deletion deadlocks with the Camel K operator,
         # which recreates the Integration's Deployment while GC is tearing it down
