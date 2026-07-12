@@ -21,11 +21,11 @@ Create `routes/<name>.yaml` and push:
 
 ```yaml
 name: orders-kk
-routeType: kafka-kafka        # kafka-kafka | https-kafka | https-https | mq-mq | https-mq | mq-https | mq-drain
+routeType: kafka-kafka        # kafka-kafka | https-kafka | https-https
 source:
-  topic: orders-in            # https-*: use httpPath: /ingest/orders instead; mq-*: use queue: DEV.X instead
+  topic: orders-in            # https-*: use httpPath: /ingest/orders instead
 sink:
-  topic: orders-out           # https-https/mq-https: use url: http://svc/path instead; mq-*: use queue: DEV.X instead
+  topic: orders-out           # https-https: use url: http://svc/path instead
 rateLimit:
   enabled: true
   key: orders                 # routes sharing a key share one global limit
@@ -35,9 +35,9 @@ rateLimit:
 
 Defaults (brokers, SASL, Redis host, TLS secret, prometheus traits) live in
 `charts/camel-route/values.yaml`. **Every route is its own Argo Application with its own
-Integration**, so a route isn't limited to overriding just its topic/queue — it can point
-at a completely different broker/queue manager with its own credentials by adding a
-`kafka:`/`mq:` block to that route's file:
+Integration**, so a route isn't limited to overriding just its topic — it can point
+at a completely different broker with its own credentials by adding a
+`kafka:` block to that route's file:
 
 ```yaml
 name: orders-kk
@@ -53,23 +53,15 @@ kafka:                                    # this route's own broker, not the sha
   credentialsSecret: orders-kafka-creds   # must exist in camel-k ns with kafka.user/kafka.password
 ```
 
-```yaml
-name: billing-mm
-routeType: mq-mq
-source:
-  queue: BILL.SOURCE
-sink:
-  queue: BILL.SINK
-mq:                                       # this route's own queue manager
-  host: mq-billing.otherteam.svc
-  port: 1414
-  channel: BILLING.SVRCONN
-  qmgr: QMBILL
-  credentialsSecret: billing-mq-creds     # must exist in camel-k ns with mq.user/mq.password
-```
+Omit `kafka:` to fall back to the chart-wide default in `values.yaml`.
+`rateLimit.mode` defaults by source: kafka → `block` (backpressure), http → `reject` (429).
 
-Omit `kafka:`/`mq:` to fall back to the chart-wide default in `values.yaml`.
-`rateLimit.mode` defaults by source: kafka/mq → `block` (backpressure), http → `reject` (429).
+> **IBM MQ support removed for now**: the `mq-mq` / `https-mq` / `mq-https` / `mq-drain`
+> routeTypes, the `mqConnectionFactory` bean, and the MQ route files have been pulled out.
+> The MQ Advanced for Developers image is amd64/s390x/ppc64le-only and its glibc build
+> requires x86-64-v3 CPU features that QEMU emulation on Apple Silicon doesn't provide, so
+> it can't run on this local cluster. Re-add it if running on an amd64 host or once a
+> working emulation path is found.
 
 - **Change a route**: edit its file, push — self-heal syncs it.
 - **Delete a route**: delete the file, push — prune removes the Integration.

@@ -8,7 +8,7 @@ spec:
   goTemplateOptions: ["missingkey=error"]
   generators:
     - git:
-        repoURL: https://github.com/TheRozom/camel-routes-gitops.git
+        repoURL: https://github.com/tiketuser/camel-routes-gitops.git
         revision: main
         files:
           - path: "routes/*.yaml"
@@ -28,7 +28,7 @@ spec:
     spec:
       project: camel-routes
       source:
-        repoURL: https://github.com/TheRozom/camel-routes-gitops.git
+        repoURL: https://github.com/tiketuser/camel-routes-gitops.git
         targetRevision: main
         path: charts/camel-route
         helm:

@@ -1,10 +1,9 @@
 {{- $t := include "camel-route.type" . -}}
 {{- $httpSource := eq (include "camel-route.httpSource" .) "true" -}}
 {{- $usesKafka := eq (include "camel-route.usesKafka" .) "true" -}}
-{{- $usesMq := eq (include "camel-route.usesMq" .) "true" -}}
 {{- $usesEcho := and .Values.sink (ne (.Values.sink.url | default "") "") -}}
 {{- $clientAuth := and $httpSource .Values.tls.enabled .Values.tls.clientAuth.enabled -}}
-{{- $needsPlugin := or .Values.rateLimit.enabled $usesMq $usesEcho -}}
+{{- $needsPlugin := or .Values.rateLimit.enabled $usesEcho -}}
 apiVersion: camel.apache.org/v1
 kind: Integration
 metadata:
@@ -21,10 +20,6 @@ spec:
     {{- if $usesKafka }}
     - camel:kafka
     {{- end }}
-    {{- if or $usesMq $needsPlugin }}
-    - camel:jms
-    - mvn:com.ibm.mq:com.ibm.mq.jakarta.client:9.4.4.0
-    {{- end }}
     {{- if $httpSource }}
     - camel:platform-http
     {{- end }}
@@ -38,16 +33,11 @@ spec:
     prometheus:
       enabled: {{ .Values.traits.prometheus.enabled }}
       podMonitor: {{ .Values.traits.prometheus.podMonitor }}
-    {{- if or $usesKafka $usesMq $usesEcho (and $httpSource .Values.tls.enabled) }}
+    {{- if or $usesKafka $usesEcho (and $httpSource .Values.tls.enabled) }}
     mount:
-      {{- if or $usesKafka $usesMq }}
+      {{- if $usesKafka }}
       configs:
-        {{- if $usesKafka }}
         - secret:{{ .Values.kafka.credentialsSecret }}
-        {{- end }}
-        {{- if $usesMq }}
-        - secret:{{ .Values.mq.credentialsSecret }}
-        {{- end }}
       {{- end }}
       {{- if or (and $httpSource .Values.tls.enabled) $usesEcho }}
       resources:
@@ -79,12 +69,6 @@ spec:
       vars:
         - REDIS_HOST={{ .Values.redis.host }}
         - REDIS_PORT={{ .Values.redis.port }}
-        {{- if $usesMq }}
-        - MQ_HOST={{ .Values.mq.host }}
-        - MQ_PORT={{ .Values.mq.port | toString }}
-        - MQ_CHANNEL={{ .Values.mq.channel }}
-        - MQ_QMGR={{ .Values.mq.qmgr }}
-        {{- end }}
   sources:
     {{- if $needsPlugin }}
     - name: RateLimit.java

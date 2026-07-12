@@ -1,8 +1,8 @@
 {{/* Validate routeType */}}
 {{- define "camel-route.type" -}}
-{{- $t := required "routeType is required (kafka-kafka | https-kafka | https-https | mq-mq | https-mq | mq-https | mq-drain)" .Values.routeType -}}
-{{- if not (has $t (list "kafka-kafka" "https-kafka" "https-https" "mq-mq" "https-mq" "mq-https" "mq-drain")) -}}
-{{- fail (printf "unknown routeType %q" $t) -}}
+{{- $t := required "routeType is required (kafka-kafka | https-kafka | https-https)" .Values.routeType -}}
+{{- if not (has $t (list "kafka-kafka" "https-kafka" "https-https")) -}}
+{{- fail (printf "unknown routeType %q (IBM MQ routeTypes are disabled for now)" $t) -}}
 {{- end -}}
 {{- $t -}}
 {{- end -}}
@@ -10,11 +10,6 @@
 {{/* Does the route touch Kafka at all? */}}
 {{- define "camel-route.usesKafka" -}}
 {{- if has (include "camel-route.type" .) (list "kafka-kafka" "https-kafka") }}true{{ end -}}
-{{- end -}}
-
-{{/* Does the route touch IBM MQ at all? */}}
-{{- define "camel-route.usesMq" -}}
-{{- if has (include "camel-route.type" .) (list "mq-mq" "https-mq" "mq-https" "mq-drain") }}true{{ end -}}
 {{- end -}}
 
 {{/* Is the source HTTP? */}}
@@ -33,13 +28,6 @@ brokers: "{{ .Values.kafka.brokers }}"
 securityProtocol: {{ .Values.kafka.securityProtocol }}
 saslMechanism: {{ .Values.kafka.saslMechanism }}
 saslJaasConfig: '{{ include "camel-route.jaas" . }}'
-{{- end -}}
-
-{{/* Shared JMS/MQ endpoint parameters (indented by caller) */}}
-{{- define "camel-route.mqParams" -}}
-connectionFactory: "#mqConnectionFactory"
-username: "{{ `{{mq.user}}` }}"
-password: "{{ `{{mq.password}}` }}"
 {{- end -}}
 
 {{/* Rate-limit bean step (or nothing when disabled) */}}
@@ -126,81 +114,5 @@ password: "{{ `{{mq.password}}` }}"
             constant: "202"
         - setBody:
             constant: "forwarded\n"
-{{- else if eq $t "mq-mq" -}}
-- route:
-    id: {{ .Values.name }}
-    from:
-      uri: "jms:queue:{{ required "source.queue required for mq-mq" .Values.source.queue }}"
-      parameters:
-        {{- include "camel-route.mqParams" . | nindent 8 }}
-      steps:
-        {{- with include "camel-route.rateLimitStep" . }}
-        {{- . | nindent 8 }}
-        {{- end }}
-        - to:
-            uri: "jms:queue:{{ required "sink.queue required for mq-mq" .Values.sink.queue }}"
-            parameters:
-              {{- include "camel-route.mqParams" . | nindent 14 }}
-              # Explicit fire-and-forget — without it camel-jms may infer request-reply.
-              exchangePattern: "InOnly"
-{{- else if eq $t "https-mq" -}}
-- route:
-    id: {{ .Values.name }}
-    from:
-      uri: "platform-http:{{ required "source.httpPath required for https-mq" .Values.source.httpPath }}"
-      steps:
-        {{- with include "camel-route.rateLimitStep" . }}
-        {{- . | nindent 8 }}
-        {{- end }}
-        - to:
-            uri: "jms:queue:{{ required "sink.queue required for https-mq" .Values.sink.queue }}"
-            parameters:
-              {{- include "camel-route.mqParams" . | nindent 14 }}
-              # Without this, camel-jms infers InOut (request-reply) because the route
-              # originates from platform-http — the dev "app" user isn't authorized to
-              # open a temporary reply queue outside its DEV.** grant.
-              exchangePattern: "InOnly"
-        - setHeader:
-            name: CamelHttpResponseCode
-            constant: "202"
-        - setBody:
-            constant: "accepted\n"
-{{- else if eq $t "mq-https" -}}
-- route:
-    id: {{ .Values.name }}
-    from:
-      uri: "jms:queue:{{ required "source.queue required for mq-https" .Values.source.queue }}"
-      parameters:
-        {{- include "camel-route.mqParams" . | nindent 8 }}
-      steps:
-        {{- with include "camel-route.rateLimitStep" . }}
-        {{- . | nindent 8 }}
-        {{- end }}
-        - removeHeaders:
-            pattern: "Camel*"
-        - setHeader:
-            name: Content-Type
-            constant: "text/plain"
-        - to:
-            uri: "https:{{ trimPrefix "https:" (trimPrefix "http:" (required "sink.url required for mq-https" .Values.sink.url)) | trimPrefix "//" }}"
-            parameters:
-              httpMethod: POST
-              bridgeEndpoint: true
-              throwExceptionOnFailure: false
-              sslContextParameters: "#echoClientSSL"
-{{- else -}}
-{{/* mq-drain: consume a terminal demo queue as fast as possible and discard.
-     No rate limit — draining faster than the source route can ever fill the
-     queue is the point, otherwise it fills to MAXDEPTH and the upstream
-     producer route starts failing sends with MQRC_Q_FULL. */}}
-- route:
-    id: {{ .Values.name }}
-    from:
-      uri: "jms:queue:{{ required "source.queue required for mq-drain" .Values.source.queue }}"
-      parameters:
-        {{- include "camel-route.mqParams" . | nindent 8 }}
-      steps:
-        - to:
-            uri: "log:{{ .Values.name }}?level=OFF"
 {{- end -}}
 {{- end -}}
