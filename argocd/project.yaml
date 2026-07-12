@@ -8,7 +8,7 @@ metadata:
 spec:
   description: Camel K bridge routes (GitOps-managed Integrations only)
   sourceRepos:
-    - https://github.com/TheRozom/camel-routes-gitops.git
+    - https://github.com/tiketuser/camel-routes-gitops.git
   destinations:
     - server: https://kubernetes.default.svc
       namespace: camel-k
