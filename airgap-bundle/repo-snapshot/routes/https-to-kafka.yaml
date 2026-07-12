@@ -6,11 +6,10 @@ source:
 sink:
   kafka:
     topic: hk-sink
-kafka:
-  brokers: kafka.kafka.svc.cluster.local:9092
-  securityProtocol: SASL_PLAINTEXT
-  saslMechanism: SCRAM-SHA-256
-  credentialsSecret: kafka-scram-credentials
+    brokers: kafka.kafka.svc.cluster.local:9092
+    securityProtocol: SASL_PLAINTEXT
+    saslMechanism: SCRAM-SHA-256
+    credentialsSecret: kafka-scram-credentials
 rateLimit:
   enabled: true
   key: hk

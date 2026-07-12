@@ -1,19 +1,23 @@
 # kafka-to-kafka: consume kk-source -> rate-limit (blocking backpressure) -> produce kk-sink.
-# Both sides inherit the chart-wide kafka: defaults; either side could set its own
-# brokers/credentials to bridge two clusters.
+# Same cluster on both sides here, so source and sink just happen to name the same
+# credentialsSecret; either side could instead point at its own secret/brokers to
+# bridge two different clusters.
 name: kafka-to-kafka
 source:
   kafka:
     topic: kk-source
     groupId: kk-bridge
+    brokers: kafka.kafka.svc.cluster.local:9092
+    securityProtocol: SASL_PLAINTEXT
+    saslMechanism: SCRAM-SHA-256
+    credentialsSecret: kafka-scram-credentials
 sink:
   kafka:
     topic: kk-sink
-kafka:
-  brokers: kafka.kafka.svc.cluster.local:9092
-  securityProtocol: SASL_PLAINTEXT
-  saslMechanism: SCRAM-SHA-256
-  credentialsSecret: kafka-scram-credentials
+    brokers: kafka.kafka.svc.cluster.local:9092
+    securityProtocol: SASL_PLAINTEXT
+    saslMechanism: SCRAM-SHA-256
+    credentialsSecret: kafka-scram-credentials
 rateLimit:
   enabled: true
   key: kk
