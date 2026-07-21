@@ -1,0 +1,80 @@
+flowchart TB
+
+    dev["👩‍💻 Route author<br/><i>writes ONE Pipe file, pushes</i>"]
+
+    subgraph git["📁 Git — camel-routes-gitops (single source of truth)"]
+        direction LR
+        g_kamelets["kamelets/<br/>5 Kamelets — the vocabulary<br/>(kafka-scram src/sink, mtls-http src/sink,<br/>rate-limit-action)"]
+        g_routes["routes/<br/>one Pipe CR per route"]
+        g_platform["platform/<br/>trait defaults + scraper RBAC"]
+        g_logging["logging/<br/>Filebeat DaemonSet"]
+        g_external["external/<br/>Prometheus scrape + alert config<br/><i>(copied out, not synced)</i>"]
+    end
+
+    subgraph mgmt["🌐 Management side — outside the cluster"]
+        argo["Argo CD<br/>4 Applications, sync-waves<br/>prune + self-heal"]
+        prom["Prometheus<br/>discovers & scrapes pods<br/>through kube-API proxy"]
+        es["Elasticsearch :9200<br/>index camel-routes-*"]
+        kibana["Kibana<br/>per-route log views<br/>(filter: integration label)"]
+    end
+
+    subgraph cluster["☸️ Cluster — k3d now, air-gapped later"]
+        api["kube-API server :6443<br/><b>the ONE shared inbound opening</b><br/>(Argo sync + metrics proxy)"]
+
+        subgraph camelk["namespace: camel-k"]
+            kamelet_crs["Kamelet CRs"]
+            pipe_crs["Pipe CRs<br/>(one per route)"]
+            operator["Camel K operator"]
+            integrations["Integration CRs<br/>+ default traits:<br/>prometheus · logging.json · health"]
+            pods["Route pods (Deployments)<br/>:8080 /q/metrics<br/>JSON logs · probes<br/>mTLS 8443 inbound"]
+            redis["Redis<br/>shared token buckets<br/>(atomic Lua, cross-route keys)"]
+            kafka["Kafka<br/>SASL/SCRAM"]
+            buildinfra["Registry + Maven mirror<br/>incl. ratelimit-plugin.jar"]
+            secrets["Pre-provisioned Secrets<br/>SCRAM · TLS · ES api-key<br/><i>(runbook, not Git)</i>"]
+        end
+
+        filebeat["Filebeat DaemonSet<br/>autodiscover by integration label<br/>decode JSON → ECS"]
+    end
+
+    extsys["🔒 External HTTPS systems<br/>(mTLS both legs:<br/>platform-http in · camel:http out)"]
+
+    %% GitOps control flow
+    dev -->|git push| g_routes
+    git -.->|poll / webhook| argo
+    argo ==>|"sync over :6443"| api
+    api --> kamelet_crs
+    api --> pipe_crs
+    api --> filebeat
+    operator -->|watches| pipe_crs
+    operator -->|resolves| kamelet_crs
+    operator -->|generates| integrations
+    operator -->|"builds image<br/>(deps from mirror)"| buildinfra
+    integrations -->|runs as| pods
+    secrets -.->|mounted into| pods
+
+    %% Data plane
+    kafka <-->|consume / produce| pods
+    pods <-->|mTLS| extsys
+    pods -->|"EVAL token bucket<br/>(1 round-trip/msg)"| redis
+
+    %% Metrics path (outside-in, no new opening)
+    prom ==>|"GET /api/v1/…/pods/POD:8080/proxy/q/metrics<br/>scoped SA: pods + pods/proxy only"| api
+    api -.->|proxy| pods
+
+    %% Logs path (inside-out, the one new opening)
+    pods -.->|stdout JSON| filebeat
+    filebeat ==>|"push :9200<br/><b>the ONE outbound opening</b>"| es
+    es --> kibana
+
+    %% Styling
+    classDef gitStyle fill:#f0f7ff,stroke:#2b6cb0,color:#1a365d
+    classDef mgmtStyle fill:#fffaf0,stroke:#c05621,color:#7b341e
+    classDef clusterStyle fill:#f0fff4,stroke:#2f855a,color:#22543d
+    classDef dataStyle fill:#faf5ff,stroke:#6b46c1,color:#44337a
+    classDef extStyle fill:#fff5f5,stroke:#c53030,color:#742a2a
+
+    class g_kamelets,g_routes,g_platform,g_logging,g_external gitStyle
+    class argo,prom,es,kibana mgmtStyle
+    class api,kamelet_crs,pipe_crs,operator,integrations,pods,filebeat clusterStyle
+    class redis,kafka,buildinfra,secrets dataStyle
+    class extsys,dev extStyle

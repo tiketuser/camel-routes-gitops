@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Camel K Route Automation — GitOps v2</title>
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({ startOnLoad: true, theme: 'dark', themeVariables: { fontSize: '15px' } });
+</script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: #0d1117; color: #e6edf3;
+    font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; }
+  .deck { height: 100vh; overflow-y: scroll; scroll-snap-type: y mandatory; }
+  section.slide {
+    height: 100vh; scroll-snap-align: start; padding: 6vh 8vw;
+    display: flex; flex-direction: column; justify-content: center; position: relative;
+  }
+  .slide::after { content: attr(data-n); position: absolute; bottom: 20px; right: 30px;
+    color: #484f58; font-size: 14px; }
+  h1 { font-size: 3.2em; line-height: 1.15; margin-bottom: 18px;
+    background: linear-gradient(90deg,#79c0ff,#d2a8ff); -webkit-background-clip: text;
+    background-clip: text; color: transparent; }
+  h2 { font-size: 2.1em; margin-bottom: 28px; color: #79c0ff; }
+  h3 { color: #d2a8ff; margin: 14px 0 8px; }
+  p.sub { color: #8b949e; font-size: 1.25em; max-width: 34em; }
+  ul { list-style: none; font-size: 1.18em; line-height: 1.55; }
+  ul li { margin: 12px 0; padding-left: 28px; position: relative; }
+  ul li::before { content: '▸'; position: absolute; left: 0; color: #d2a8ff; }
+  li b, p b { color: #79c0ff; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: start; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px;
+    padding: 22px 26px; }
+  .card.bad  { border-left: 4px solid #f85149; }
+  .card.good { border-left: 4px solid #3fb950; }
+  .tag { display: inline-block; font-size: .78em; padding: 2px 10px; border-radius: 20px;
+    margin-bottom: 10px; font-weight: 600; }
+  .tag.red   { background: #3d1d20; color: #f85149; }
+  .tag.green { background: #16301f; color: #3fb950; }
+  pre { background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+    padding: 18px 20px; font-size: .95em; line-height: 1.45; overflow-x: auto;
+    font-family: 'SF Mono', Menlo, Consolas, monospace; color: #a5d6ff; }
+  pre .k { color: #ff7b72; } pre .v { color: #d2a8ff; } pre .c { color: #8b949e; }
+  table { border-collapse: collapse; font-size: 1.05em; margin-top: 10px; }
+  th, td { border: 1px solid #30363d; padding: 10px 18px; text-align: left; }
+  th { background: #161b22; color: #79c0ff; }
+  .flow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    font-size: 1.05em; margin: 26px 0; }
+  .flow .box { background: #161b22; border: 1px solid #388bfd66; border-radius: 10px;
+    padding: 12px 18px; text-align: center; }
+  .flow .box small { display: block; color: #8b949e; font-size: .8em; margin-top: 3px; }
+  .flow .arr { color: #d2a8ff; font-size: 1.5em; }
+  .mermaid { display: flex; justify-content: center; max-height: 74vh; }
+  .hint { position: fixed; bottom: 18px; left: 30px; color: #484f58; font-size: 13px; z-index: 5; }
+  .kpi { display: flex; gap: 26px; margin-top: 30px; }
+  .kpi .card { flex: 1; text-align: center; }
+  .kpi .num { font-size: 2.6em; font-weight: 700; color: #d2a8ff; }
+  .kpi .lbl { color: #8b949e; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="hint">scroll / ↑↓ to navigate</div>
+<div class="deck" id="deck">
+
+<!-- 1 ─ Title -->
+<section class="slide" data-n="1 / 9">
+  <h1>Camel K Route Automation</h1>
+  <p class="sub">GitOps v2 — Kamelets &amp; Pipes, zero templating,<br>
+     observability built in from the first commit.</p>
+  <div class="kpi">
+    <div class="card"><div class="num">1 file</div><div class="lbl">= one production route</div></div>
+    <div class="card"><div class="num">0</div><div class="lbl">Helm templates / helpers</div></div>
+    <div class="card"><div class="num">2</div><div class="lbl">firewall openings, total</div></div>
+  </div>
+</section>
+
+<!-- 2 ─ Why v2 -->
+<section class="slide" data-n="2 / 9">
+  <h2>Why redesign?</h2>
+  <div class="cols">
+    <div class="card bad">
+      <span class="tag red">v1 — Helm chart</span>
+      <ul>
+        <li>All logic hidden in <b>_helpers.tpl</b> — type inference, deep merges</li>
+        <li>Rendered output ≠ what you read in Git</li>
+        <li>Rate limiter injected as an inline <b>.java file</b></li>
+        <li>ApplicationSet + child app per route — extra controllers</li>
+      </ul>
+    </div>
+    <div class="card good">
+      <span class="tag green">v2 — Kamelets + Pipes</span>
+      <ul>
+        <li>Operator-native abstraction — <b>no templating layer at all</b></li>
+        <li>What's in Git <b>is</b> what hits the cluster</li>
+        <li>Rate limiter = <b>versioned jar</b> in the Maven mirror</li>
+        <li>One directory-sync Argo app; prune + self-heal per file</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 3 ─ Route model -->
+<section class="slide" data-n="3 / 9">
+  <h2>A route is one small Pipe file</h2>
+  <div class="cols">
+    <pre><span class="c"># routes/orders-kk.yaml — the WHOLE route</span>
+<span class="k">kind:</span> <span class="v">Pipe</span>
+<span class="k">metadata:</span> { <span class="k">name:</span> orders-kk }
+<span class="k">spec:</span>
+  <span class="k">source:</span>
+    <span class="k">ref:</span> { <span class="k">kind:</span> Kamelet, <span class="k">name:</span> <span class="v">kafka-scram-source</span> }
+    <span class="k">properties:</span> { <span class="k">topic:</span> orders-in }
+  <span class="k">steps:</span>
+    - <span class="k">ref:</span> { <span class="k">kind:</span> Kamelet, <span class="k">name:</span> <span class="v">rate-limit-action</span> }
+      <span class="k">properties:</span> { <span class="k">key:</span> orders, <span class="k">rate:</span> 10, <span class="k">burst:</span> 20 }
+  <span class="k">sink:</span>
+    <span class="k">ref:</span> { <span class="k">kind:</span> Kamelet, <span class="k">name:</span> <span class="v">kafka-scram-sink</span> }
+    <span class="k">properties:</span> { <span class="k">topic:</span> orders-out }</pre>
+    <div>
+      <h3>5 Kamelets = the vocabulary (written once)</h3>
+      <ul>
+        <li><b>kafka-scram-source / -sink</b> — brokers, SASL, secrets, per-side overrides</li>
+        <li><b>mtls-http-source</b> — platform-http :8443, client-auth REQUIRED</li>
+        <li><b>mtls-http-sink</b> — camel:http + client keystore, pinned truststore</li>
+        <li><b>rate-limit-action</b> — Redis token bucket via <b>ratelimit-plugin.jar</b></li>
+      </ul>
+      <p class="sub" style="margin-top:14px">Route "type" = which Kamelets it composes.
+      No enum, no inference — nothing to drift.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 4 ─ GitOps flow -->
+<section class="slide" data-n="4 / 9">
+  <h2>Push-to-running, no hands on the cluster</h2>
+  <div class="flow">
+    <div class="box">git push<small>one Pipe file</small></div><span class="arr">→</span>
+    <div class="box">Argo CD<small>4 apps · sync-waves · self-heal</small></div><span class="arr">→</span>
+    <div class="box">kube-API :6443<small>the shared opening</small></div><span class="arr">→</span>
+    <div class="box">Pipe CR<small>camel-k ns</small></div><span class="arr">→</span>
+    <div class="box">Camel K operator<small>resolves Kamelets</small></div><span class="arr">→</span>
+    <div class="box">Integration<small>+ default traits</small></div><span class="arr">→</span>
+    <div class="box">Running pod<small>built via in-cluster mirror</small></div>
+  </div>
+  <ul>
+    <li><b>Add</b> a route = add a file · <b>change</b> = edit · <b>delete</b> = remove (auto-prune)</li>
+    <li>Sync-waves apply Kamelets &amp; platform <b>before</b> any route references them</li>
+    <li>Custom Lua health check: Argo shows real per-route status (Ready / Error)</li>
+    <li>Manual cluster drift is reverted by self-heal — Git can't be bypassed</li>
+  </ul>
+</section>
+
+<!-- 5 ─ Full system diagram -->
+<section class="slide" data-n="5 / 9">
+  <h2>The whole system</h2>
+  <div class="mermaid">
+flowchart LR
+    dev["👩‍💻 author"] -->|push| git["📁 Git repo<br/>kamelets · routes · platform · logging"]
+    git -.-> argo
+    subgraph mgmt["Management side (outside cluster)"]
+        argo["Argo CD"]
+        prom["Prometheus"]
+        es["Elasticsearch :9200"] --> kib["Kibana"]
+    end
+    subgraph cl["Cluster — k3d now · air-gapped later"]
+        api["kube-API :6443"]
+        subgraph ck["ns camel-k"]
+            op["Camel K operator"] --> pods["route pods<br/>:8080 /q/metrics · JSON logs"]
+            redis["Redis buckets"]
+            kafka["Kafka SASL/SCRAM"]
+        end
+        fb["Filebeat DaemonSet"]
+    end
+    ext["🔒 mTLS peers"]
+    argo ==>|"sync :6443"| api --> op
+    prom ==>|"scrape via API proxy :6443"| api -.-> pods
+    pods --> redis
+    kafka <--> pods
+    pods <--> ext
+    pods -.->|stdout JSON| fb ==>|":9200 outbound"| es
+  </div>
+</section>
+
+<!-- 6 ─ Metrics -->
+<section class="slide" data-n="6 / 9">
+  <h2>Metrics — external Prometheus, no new firewall rule</h2>
+  <div class="cols">
+    <ul>
+      <li>Prometheus trait <b>on by default</b> (central trait config) — every route exposes <b>/q/metrics</b>, authors never think about it</li>
+      <li>Prometheus discovers pods with <b>kubernetes_sd</b> and scrapes <b>through the kube-API proxy on :6443</b> — the same opening Argo uses</li>
+      <li>Scoped <b>prometheus-scraper</b> SA: list pods + pods/proxy in camel-k, nothing else</li>
+      <li>New route ⇒ appears in Prometheus <b>automatically</b>, labeled <b>route=&lt;name&gt;</b></li>
+    </ul>
+    <div>
+      <pre><span class="c"># scrape path per pod</span>
+/api/v1/namespaces/camel-k/pods/
+      &lt;pod&gt;:8080/proxy/q/metrics</pre>
+      <h3>Starter alerts</h3>
+      <ul>
+        <li>RouteDown · RouteVanished</li>
+        <li>FailureRatio &gt; 5% (5m)</li>
+        <li>Sustained 429s (reject mode)</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 7 ─ Logs -->
+<section class="slide" data-n="7 / 9">
+  <h2>Logs — Filebeat → Elasticsearch (no Loki)</h2>
+  <div class="flow">
+    <div class="box">route pod<small>logging.json trait → structured stdout</small></div><span class="arr">→</span>
+    <div class="box">Filebeat DaemonSet<small>autodiscover by integration label</small></div><span class="arr">→</span>
+    <div class="box">decode_json_fields<small>no regex parsing anywhere</small></div><span class="arr">→</span>
+    <div class="box">Elasticsearch :9200<small>the ONE new opening</small></div><span class="arr">→</span>
+    <div class="box">Kibana<small>filter by route label</small></div>
+  </div>
+  <ul>
+    <li>Filebeat is <b>GitOps-managed</b> like everything else (logging/ folder)</li>
+    <li>Ships <b>only</b> Camel route pods — matched by the integration label</li>
+    <li>ES endpoint + API key in a pre-provisioned Secret (runbook, not Git)</li>
+    <li>Same label on logs and metrics ⇒ one-click correlation per route</li>
+  </ul>
+</section>
+
+<!-- 8 ─ Rate limiting -->
+<section class="slide" data-n="8 / 9">
+  <h2>Rate limiting — correct across replicas, routes, restarts</h2>
+  <div class="cols">
+    <ul>
+      <li>Token bucket state in <b>Redis</b>, refill+consume as one <b>atomic Lua script</b></li>
+      <li><b>block</b> mode (Kafka) = native backpressure · <b>reject</b> mode (HTTP) = 429 + Retry-After</li>
+      <li>Same <b>key</b> on two Pipes ⇒ one shared global SLA across routes</li>
+      <li>In-memory limiters silently multiply the SLA per replica — Redis is the one value every pod agrees on</li>
+    </ul>
+    <div class="card good">
+      <span class="tag green">v2 packaging</span>
+      <p style="line-height:1.6">The Java bean ships as <b>ratelimit-plugin.jar</b> in the
+      Maven mirror. The <b>rate-limit-action</b> Kamelet declares it as a dependency —
+      upgrading the limiter for every route is a <b>one-line version bump</b> in one file.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 9 ─ Rollout -->
+<section class="slide" data-n="9 / 9">
+  <h2>Rollout plan &amp; day-2</h2>
+  <div class="cols">
+    <div>
+      <h3>Migration (k3d first → air-gap)</h3>
+      <ul>
+        <li>1 · Publish ratelimit-plugin.jar to the mirror</li>
+        <li>2 · Write 5 Kamelets, validate with throwaway Pipes</li>
+        <li>3 · Port the 3 routes, diff behavior vs. Helm version</li>
+        <li>4 · Swap Argo apps + Pipe health check</li>
+        <li>5 · Wire external Prometheus + Filebeat→ES</li>
+        <li>6 · Prod = same repo, new endpoints, open :9200</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Day-2 operations</h3>
+      <table>
+        <tr><th>Task</th><th>Action</th></tr>
+        <tr><td>Add / change / delete route</td><td>one file, push</td></tr>
+        <tr><td>Metrics &amp; logs for new route</td><td>automatic</td></tr>
+        <tr><td>Change SASL / TLS globally</td><td>edit one Kamelet</td></tr>
+        <tr><td>Upgrade rate limiter</td><td>bump one version</td></tr>
+        <tr><td>Share a limit across routes</td><td>same <b>key</b></td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+</div>
+<script>
+  const deck = document.getElementById('deck');
+  addEventListener('keydown', e => {
+    if (['ArrowDown','ArrowRight','PageDown',' '].includes(e.key)) { e.preventDefault(); deck.scrollBy({top: innerHeight, behavior:'smooth'}); }
+    if (['ArrowUp','ArrowLeft','PageUp'].includes(e.key))          { e.preventDefault(); deck.scrollBy({top:-innerHeight, behavior:'smooth'}); }
+  });
+</script>
+</body>
+</html>
