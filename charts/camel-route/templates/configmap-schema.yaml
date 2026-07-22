@@ -1,0 +1,26 @@
+{{- if .Values.validate.enabled }}
+{{- $schemaJson := "" }}
+{{- if .Values.validate.schemaFile }}
+{{- $schemaJson = .Files.Get (printf "files/schemas/%s" .Values.validate.schemaFile) }}
+{{- if not $schemaJson }}{{- fail (printf "validate.schemaFile %q not found under charts/camel-route/files/schemas/" .Values.validate.schemaFile) }}{{- end }}
+{{- $_ := $schemaJson | fromJson }}{{/* parse to fail-fast on malformed JSON */}}
+{{- else if .Values.validate.schema }}
+{{- $schemaJson = .Values.validate.schema | toPrettyJson }}
+{{- else }}
+{{- fail "validate.enabled requires validate.schemaFile (a file under files/schemas/) or validate.schema (an inline map)" }}
+{{- end }}
+# JSON Schema for {{ .Values.name }}, mounted at /etc/schemas/{{ .Values.name }}.json
+# and referenced by the route's json-validator step.
+{{- if .Values.validate.schemaFile }} Source: files/schemas/{{ .Values.validate.schemaFile }}.{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.name }}-schema
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    camel-route/schema: {{ .Values.name }}
+data:
+  {{ .Values.name }}.json: |
+{{ $schemaJson | indent 4 }}
+{{- end }}

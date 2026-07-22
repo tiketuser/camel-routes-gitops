@@ -1,0 +1,30 @@
+# kafka-to-kafka-validated: consume kk-source -> rate-limit (blocking backpressure) ->
+# JSON Schema check -> produce kk-sink. Messages that don't match the schema are logged
+# and routed to kk-invalid (a dead-letter topic on the same cluster) instead of kk-sink,
+# and the offset still commits so a poison message never stalls the consumer group.
+name: kafka-to-kafka-validated
+source:
+  kafka:
+    topic: kk-source
+    groupId: kk-validated-bridge
+    brokers: kafka.kafka.svc.cluster.local:9092
+    securityProtocol: SASL_PLAINTEXT
+    saslMechanism: SCRAM-SHA-256
+    credentialsSecret: kafka-scram-credentials
+sink:
+  kafka:
+    topic: kk-sink
+    brokers: kafka.kafka.svc.cluster.local:9092
+    securityProtocol: SASL_PLAINTEXT
+    saslMechanism: SCRAM-SHA-256
+    credentialsSecret: kafka-scram-credentials
+rateLimit:
+  enabled: true
+  key: kk-validated
+  rate: 10.0
+  burst: 20
+validate:
+  enabled: true
+  deadLetterTopic: kk-invalid
+  # Each consumed message value must match this JSON Schema, else dead-lettered.
+  schemaFile: order.json

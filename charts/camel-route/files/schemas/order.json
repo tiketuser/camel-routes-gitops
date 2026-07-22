@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://camel-routes.tiket/schemas/order.json",
+  "title": "Order",
+  "description": "Canonical order payload every validated route accepts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["orderId", "amount", "currency"],
+  "properties": {
+    "orderId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "amount": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "currency": {
+      "type": "string",
+      "enum": ["USD", "EUR", "ILS"]
+    }
+  }
+}

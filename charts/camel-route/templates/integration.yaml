@@ -4,6 +4,7 @@
 {{- $usesKafka := eq (include "camel-route.usesKafka" .) "true" -}}
 {{- $clientAuth := and $httpSource .Values.tls.enabled .Values.tls.clientAuth.enabled -}}
 {{- $needsPlugin := or .Values.rateLimit.enabled $httpSink -}}
+{{- $validate := .Values.validate.enabled -}}
 {{/* one mount per distinct kafka credentials secret across the two sides */}}
 {{- $kafkaSecrets := list -}}
 {{- if eq (include "camel-route.sourceKind" .) "kafka" -}}
@@ -37,6 +38,9 @@ spec:
     {{- if $httpSink }}
     - camel:http
     {{- end }}
+    {{- if $validate }}
+    - camel:json-validator
+    {{- end }}
     {{- if $needsPlugin }}
     - mvn:redis.clients:jedis:5.2.0
     {{- end }}
@@ -44,7 +48,7 @@ spec:
     prometheus:
       enabled: {{ .Values.traits.prometheus.enabled }}
       podMonitor: {{ .Values.traits.prometheus.podMonitor }}
-    {{- if or $usesKafka $httpSink (and $httpSource .Values.tls.enabled) }}
+    {{- if or $usesKafka $httpSink $validate (and $httpSource .Values.tls.enabled) }}
     mount:
       {{- if $usesKafka }}
       configs:
@@ -52,7 +56,7 @@ spec:
         - secret:{{ . }}
         {{- end }}
       {{- end }}
-      {{- if or (and $httpSource .Values.tls.enabled) $httpSink }}
+      {{- if or (and $httpSource .Values.tls.enabled) $httpSink $validate }}
       resources:
         {{- if and $httpSource .Values.tls.enabled }}
         - secret:{{ .Values.tls.secret }}@/etc/tls
@@ -62,6 +66,9 @@ spec:
         {{- end }}
         {{- if $httpSink }}
         - secret:{{ .Values.echoTls.secret }}@/etc/echo-tls
+        {{- end }}
+        {{- if $validate }}
+        - configmap:{{ .Values.name }}-schema@/etc/schemas
         {{- end }}
       {{- end }}
     {{- end }}

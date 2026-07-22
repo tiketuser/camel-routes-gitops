@@ -1,0 +1,18 @@
+# https-validated: POST /ingest/validated -> rate-limit (429 over limit) ->
+# JSON Schema check (400 on malformed/invalid body) -> forward to echo-server -> 202.
+name: https-validated
+source:
+  http:
+    path: /ingest/validated
+sink:
+  http:
+    url: echo-server.camel-k.svc.cluster.local/echo
+rateLimit:
+  enabled: true
+  key: validated
+  rate: 5.0
+  burst: 10
+validate:
+  enabled: true
+  # The incoming request body must match this JSON Schema, else 400.
+  schemaFile: order.json

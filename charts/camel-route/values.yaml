@@ -31,6 +31,11 @@
 #   key: kk                        # Redis bucket key; routes sharing a key share one limit
 #   rate: 10.0                     # sustained tokens/s
 #   burst: 20                      # bucket capacity
+# validate:                        # JSON Schema check on the incoming body
+#   enabled: true                  # mismatch: http -> 400; kafka -> deadLetterTopic or drop
+#   deadLetterTopic: kk-invalid    # kafka source only; omit to log-and-drop bad messages
+#   schemaFile: order.json         # a *.json file under charts/camel-route/files/schemas/
+#   # schema: {...}                # OR an inline YAML map (schemaFile wins if both set)
 # tls:
 #   enabled: true                  # https-* only: pod-terminated TLS on 8443
 # replicas: 1
@@ -51,6 +56,17 @@ rateLimit:
   # mode defaults by source: kafka-* (queue) -> block (backpressure), https-* -> reject (429).
   # Set explicitly only to override.
   mode: ""
+
+validate:
+  enabled: false                  # off by default; per-route files opt in
+  schemaFile: ""                  # name of a *.json JSON Schema under files/schemas/;
+                                  #   rendered into a ConfigMap (<name>-schema) mounted at
+                                  #   /etc/schemas/<name>.json and applied to the incoming body
+  # schema: {}                    # alternative: an inline YAML map (schemaFile takes priority)
+  # On a mismatch: an http source answers 400; a kafka source routes the message to
+  # deadLetterTopic (below) if set, else logs and drops it — either way it commits the
+  # offset so a poison message never blocks the stream.
+  deadLetterTopic: ""             # kafka source only; topic lives on the source cluster
 
 redis:
   host: redis.redis.svc.cluster.local

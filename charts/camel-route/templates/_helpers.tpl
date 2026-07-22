@@ -88,10 +88,49 @@ saslJaasConfig: 'org.apache.kafka.common.security.scram.ScramLoginModule require
 {{- end -}}
 {{- end -}}
 
+{{/* JSON Schema validation step (or nothing when disabled). json-validator throws
+     JsonValidationException on a bad body, which the onException below handles per
+     source kind (http -> 400, kafka -> dead-letter/drop). */}}
+{{- define "camel-route.validateStep" -}}
+{{- if .Values.validate.enabled -}}
+- to:
+    uri: "json-validator:file:/etc/schemas/{{ .Values.name }}.json?contentCache=true"
+{{- end -}}
+{{- end -}}
+
 {{/* The Camel YAML route, composed from the source and sink kinds */}}
 {{- define "camel-route.routeYaml" -}}
 {{- $httpSource := eq (include "camel-route.httpSource" .) "true" -}}
 {{- $httpSink := eq (include "camel-route.httpSink" .) "true" -}}
+{{- if .Values.validate.enabled }}
+- onException:
+    handled:
+      constant: "true"
+    exception:
+      - org.apache.camel.component.jsonvalidator.JsonValidationException
+    steps:
+      {{- if $httpSource }}
+      - setHeader:
+          name: CamelHttpResponseCode
+          constant: "400"
+      - setHeader:
+          name: Content-Type
+          constant: "text/plain"
+      - setBody:
+          constant: "invalid payload\n"
+      {{- else }}
+      - log:
+          message: "schema validation failed, dropping message: ${exception.message}"
+          loggingLevel: WARN
+      {{- if .Values.validate.deadLetterTopic }}
+      {{- $src := fromYaml (include "camel-route.kafkaConfig" (dict "side" .Values.source "root" $)) }}
+      - to:
+          uri: "kafka:{{ .Values.validate.deadLetterTopic }}"
+          parameters:
+            {{- include "camel-route.kafkaParams" $src | nindent 12 }}
+      {{- end }}
+      {{- end }}
+{{- end }}
 - route:
     id: {{ .Values.name }}
     from:
@@ -107,6 +146,9 @@ saslJaasConfig: 'org.apache.kafka.common.security.scram.ScramLoginModule require
       {{- end }}
       steps:
         {{- with include "camel-route.rateLimitStep" . }}
+        {{- . | nindent 8 }}
+        {{- end }}
+        {{- with include "camel-route.validateStep" . }}
         {{- . | nindent 8 }}
         {{- end }}
         {{- if $httpSink }}
