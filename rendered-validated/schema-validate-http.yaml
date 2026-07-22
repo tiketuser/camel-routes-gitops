@@ -1,0 +1,69 @@
+# Schema-only HTTP validation route — deploy straight with the Camel K operator:
+#   kubectl apply -f schema-validate-http.yaml
+# No rate limit, no Redis, no mTLS. Depends only on camel:platform-http + camel:json-validator.
+# POST a JSON body to  http://<svc>/validate  -> 200 "valid" or 400 "invalid payload".
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: schema-validate-http-schema
+  namespace: camel-k
+data:
+  order.json: |
+    {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "Order",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["orderId", "amount", "currency"],
+      "properties": {
+        "orderId": { "type": "string", "minLength": 1 },
+        "amount":  { "type": "number", "exclusiveMinimum": 0 },
+        "currency": { "type": "string", "enum": ["USD", "EUR", "ILS"] }
+      }
+    }
+---
+apiVersion: camel.apache.org/v1
+kind: Integration
+metadata:
+  name: schema-validate-http
+  namespace: camel-k
+spec:
+  dependencies:
+    - camel:platform-http
+    - camel:json-validator
+  traits:
+    mount:
+      resources:
+        - configmap:schema-validate-http-schema@/etc/schemas
+  sources:
+    - name: schema-validate-http.yaml
+      content: |
+        - onException:
+            handled:
+              constant: "true"
+            exception:
+              - org.apache.camel.component.jsonvalidator.JsonValidationException
+            steps:
+              - setHeader:
+                  name: CamelHttpResponseCode
+                  constant: "400"
+              - setHeader:
+                  name: Content-Type
+                  constant: "text/plain"
+              - setBody:
+                  constant: "invalid payload\n"
+        - route:
+            id: schema-validate-http
+            from:
+              uri: "platform-http:/validate"
+              steps:
+                - to:
+                    uri: "json-validator:file:/etc/schemas/order.json?contentCache=true"
+                - setHeader:
+                    name: CamelHttpResponseCode
+                    constant: "200"
+                - setHeader:
+                    name: Content-Type
+                    constant: "text/plain"
+                - setBody:
+                    constant: "valid\n"

@@ -1,0 +1,81 @@
+# Schema-only Kafka validation route — deploy straight with the Camel K operator:
+#   kubectl apply -f schema-validate-kafka.yaml
+# No rate limit, no Redis. Depends only on camel:kafka + camel:json-validator.
+# Consumes kk-source; valid messages -> kk-sink, invalid -> kk-invalid (dead-letter),
+# offset commits either way so a poison message never stalls the consumer group.
+# Requires: the kafka-scram-credentials secret in camel-k and topics kk-source / kk-sink / kk-invalid.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: schema-validate-kafka-schema
+  namespace: camel-k
+data:
+  order.json: |
+    {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "Order",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["orderId", "amount", "currency"],
+      "properties": {
+        "orderId": { "type": "string", "minLength": 1 },
+        "amount":  { "type": "number", "exclusiveMinimum": 0 },
+        "currency": { "type": "string", "enum": ["USD", "EUR", "ILS"] }
+      }
+    }
+---
+apiVersion: camel.apache.org/v1
+kind: Integration
+metadata:
+  name: schema-validate-kafka
+  namespace: camel-k
+spec:
+  dependencies:
+    - camel:kafka
+    - camel:json-validator
+  traits:
+    mount:
+      configs:
+        - secret:kafka-scram-credentials
+      resources:
+        - configmap:schema-validate-kafka-schema@/etc/schemas
+  sources:
+    - name: schema-validate-kafka.yaml
+      content: |
+        - onException:
+            handled:
+              constant: "true"
+            exception:
+              - org.apache.camel.component.jsonvalidator.JsonValidationException
+            steps:
+              - log:
+                  message: "schema validation failed, dropping message: ${exception.message}"
+                  loggingLevel: WARN
+              - to:
+                  uri: "kafka:kk-invalid"
+                  parameters:
+                    brokers: "kafka.kafka.svc.cluster.local:9092"
+                    securityProtocol: SASL_PLAINTEXT
+                    saslMechanism: SCRAM-SHA-256
+                    saslJaasConfig: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="{{kafka.user}}" password="{{kafka.password}}";'
+        - route:
+            id: schema-validate-kafka
+            from:
+              uri: "kafka:kk-source"
+              parameters:
+                groupId: schema-validate-kafka-group
+                autoOffsetReset: earliest
+                brokers: "kafka.kafka.svc.cluster.local:9092"
+                securityProtocol: SASL_PLAINTEXT
+                saslMechanism: SCRAM-SHA-256
+                saslJaasConfig: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="{{kafka.user}}" password="{{kafka.password}}";'
+              steps:
+                - to:
+                    uri: "json-validator:file:/etc/schemas/order.json?contentCache=true"
+                - to:
+                    uri: "kafka:kk-sink"
+                    parameters:
+                      brokers: "kafka.kafka.svc.cluster.local:9092"
+                      securityProtocol: SASL_PLAINTEXT
+                      saslMechanism: SCRAM-SHA-256
+                      saslJaasConfig: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="{{kafka.user}}" password="{{kafka.password}}";'
